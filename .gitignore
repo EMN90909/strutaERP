@@ -1,0 +1,4 @@
+platform_data.json
+*.exe
+*.test
+.env

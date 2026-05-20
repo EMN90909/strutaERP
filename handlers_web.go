@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 )
@@ -53,6 +55,8 @@ func (app *App) HandleSetup(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:    now(),
 	}
 	app.Data.Users = append(app.Data.Users, user)
+	app.ensureDefaultProjectLocked()
+	app.Data.Projects[0].CreatedBy = user.ID
 	app.logActivityLocked(user.ID, "", r, "SUPERUSER_CREATED", "Initial platform owner account created")
 	app.saveLocked()
 	app.createSession(w, user.ID)
@@ -103,9 +107,61 @@ func (app *App) HandleDashboard(w http.ResponseWriter, r *http.Request) {
 		"Users":      app.Data.Users,
 		"APIKeys":    app.Data.APIKeys,
 		"Activities": reverseActivities(app.Data.Activities),
-		"Tables":     tableSummaries(app.Data.Tables),
+		"Projects":   projectSummaries(app.Data.Projects),
 		"Active":     "dashboard",
+		"BaseURL":    requestBaseURL(r),
 	})
+}
+
+func (app *App) HandleCreateProject(w http.ResponseWriter, r *http.Request) {
+	user := app.CurrentUser(r)
+	if user == nil || user.Role != "superuser" {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
+		return
+	}
+
+	name := strings.TrimSpace(r.FormValue("name"))
+	description := strings.TrimSpace(r.FormValue("description"))
+	if name == "" {
+		name = "Untitled Project"
+	}
+	slug := cleanSlug(name)
+
+	app.mu.Lock()
+	baseSlug := slug
+	for n := 2; ; n++ {
+		exists := false
+		for _, p := range app.Data.Projects {
+			if p.Slug == slug {
+				exists = true
+				break
+			}
+		}
+		if !exists {
+			break
+		}
+		slug = fmt.Sprintf("%s_%d", baseSlug, n)
+	}
+	project := Project{
+		ID:          newID("prj"),
+		Name:        name,
+		Slug:        slug,
+		Description: description,
+		Tables:      map[string][]interface{}{},
+		Schemas:     map[string][]string{},
+		CreatedAt:   now(),
+		CreatedBy:   user.ID,
+	}
+	app.Data.Projects = append(app.Data.Projects, project)
+	app.logActivityLocked(user.ID, "", r, "PROJECT_CREATED", "Created project: "+name)
+	app.saveLocked()
+	app.mu.Unlock()
+
+	http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
 }
 
 func (app *App) HandleUsers(w http.ResponseWriter, r *http.Request) {
@@ -126,7 +182,33 @@ func (app *App) HandleTables(w http.ResponseWriter, r *http.Request) {
 	user := app.CurrentUser(r)
 	app.mu.Lock()
 	defer app.mu.Unlock()
-	app.Render(w, "tables", map[string]interface{}{"User": user, "Tables": tableSummaries(app.Data.Tables), "Active": "tables"})
+	projects := app.Data.Projects
+	selectedID := strings.TrimSpace(r.URL.Query().Get("project"))
+	project, _ := app.projectByIDLocked(selectedID)
+	var tables []map[string]interface{}
+	if project != nil {
+		tables = tableSummaries(project.Tables)
+		selectedID = project.ID
+	}
+	app.Render(w, "tables", map[string]interface{}{"User": user, "Projects": projects, "SelectedProjectID": selectedID, "Tables": tables, "Active": "tables"})
+}
+
+func (app *App) HandleSQL(w http.ResponseWriter, r *http.Request) {
+	user := app.CurrentUser(r)
+	data := map[string]interface{}{"User": user, "Active": "sql", "BaseURL": requestBaseURL(r)}
+	if r.Method == http.MethodPost {
+		projectID := strings.TrimSpace(r.FormValue("project_id"))
+		query := strings.TrimSpace(r.FormValue("query"))
+		result, errText := app.runSQLLikeQuery(user, r, projectID, query)
+		data["SelectedProjectID"] = projectID
+		data["Query"] = query
+		data["Result"] = result
+		data["Error"] = errText
+	}
+	app.mu.Lock()
+	data["Projects"] = app.Data.Projects
+	app.mu.Unlock()
+	app.Render(w, "sql", data)
 }
 
 func (app *App) HandleFeatures(w http.ResponseWriter, r *http.Request) {
@@ -138,7 +220,7 @@ func (app *App) HandleAPIKeys(w http.ResponseWriter, r *http.Request) {
 	user := app.CurrentUser(r)
 	app.mu.Lock()
 	defer app.mu.Unlock()
-	app.Render(w, "api_keys", map[string]interface{}{"User": user, "APIKeys": app.Data.APIKeys, "Active": "api_keys"})
+	app.Render(w, "api_keys", map[string]interface{}{"User": user, "APIKeys": app.Data.APIKeys, "Projects": app.Data.Projects, "Active": "api_keys", "BaseURL": requestBaseURL(r)})
 }
 
 func (app *App) HandleCreateAPIKey(w http.ResponseWriter, r *http.Request) {
@@ -155,6 +237,7 @@ func (app *App) HandleCreateAPIKey(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimSpace(r.FormValue("name"))
 	keyType := strings.TrimSpace(r.FormValue("type"))
 	description := strings.TrimSpace(r.FormValue("description"))
+	projectID := strings.TrimSpace(r.FormValue("project_id"))
 	if name == "" {
 		name = "Untitled API Key"
 	}
@@ -170,6 +253,14 @@ func (app *App) HandleCreateAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	app.mu.Lock()
+	if projectID == "" {
+		if project, ok := app.projectByIDLocked(""); ok {
+			projectID = project.ID
+		}
+	}
+	app.mu.Unlock()
+
 	apiKey := APIKey{
 		ID:          newID("key"),
 		Name:        name,
@@ -179,6 +270,7 @@ func (app *App) HandleCreateAPIKey(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:   now(),
 		CreatedBy:   user.ID,
 		Description: description,
+		ProjectID:   projectID,
 	}
 
 	app.mu.Lock()
@@ -188,4 +280,54 @@ func (app *App) HandleCreateAPIKey(w http.ResponseWriter, r *http.Request) {
 	app.mu.Unlock()
 
 	http.Redirect(w, r, "/api-keys", http.StatusSeeOther)
+}
+
+func (app *App) runSQLLikeQuery(user *User, r *http.Request, projectID, query string) (string, string) {
+	if strings.TrimSpace(query) == "" {
+		return "", "Enter a query first."
+	}
+
+	fields := strings.Fields(strings.TrimSuffix(query, ";"))
+	if len(fields) == 0 {
+		return "", "Enter a query first."
+	}
+
+	app.mu.Lock()
+	defer app.mu.Unlock()
+	project, ok := app.projectByIDLocked(projectID)
+	if !ok {
+		return "", "Project not found."
+	}
+
+	upper := strings.ToUpper(query)
+	switch {
+	case strings.HasPrefix(upper, "SHOW TABLES"):
+		result, _ := json.MarshalIndent(tableSummaries(project.Tables), "", "  ")
+		app.logActivityLocked(user.ID, "", r, "SQL_SHOW_TABLES", "Listed tables in "+project.Name)
+		app.saveLocked()
+		return string(result), ""
+	case strings.HasPrefix(upper, "SELECT * FROM "):
+		tableName := cleanTableName(strings.TrimSpace(query[len("SELECT * FROM "):]))
+		records, exists := project.Tables[tableName]
+		if !exists {
+			return "", "Table not found: " + tableName
+		}
+		result, _ := json.MarshalIndent(records, "", "  ")
+		app.logActivityLocked(user.ID, "", r, "SQL_SELECT", "Selected records from "+tableName)
+		app.saveLocked()
+		return string(result), ""
+	case strings.HasPrefix(upper, "CREATE TABLE "):
+		tableName := cleanTableName(strings.TrimSpace(query[len("CREATE TABLE "):]))
+		if tableName == "" {
+			return "", "Table name is required."
+		}
+		if _, exists := project.Tables[tableName]; !exists {
+			project.Tables[tableName] = []interface{}{}
+		}
+		app.logActivityLocked(user.ID, "", r, "SQL_CREATE_TABLE", "Created table "+tableName+" in "+project.Name)
+		app.saveLocked()
+		return "Table ready: " + tableName, ""
+	default:
+		return "", "Supported commands: SHOW TABLES; SELECT * FROM table_name; CREATE TABLE table_name;"
+	}
 }

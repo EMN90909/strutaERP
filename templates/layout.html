@@ -11,7 +11,7 @@
 	{{if .User}}
 	<header class="topbar">
 		<div>
-			<strong>LocalDB Platform</strong>
+			<strong>Struta ERP</strong>
 			<span>{{.User.Name}} - {{.User.Role}}</span>
 		</div>
 		<a href="/logout">Logout</a>
@@ -20,6 +20,7 @@
 		<a href="/dashboard" class="{{if eq .Active "dashboard"}}active{{end}}">Dashboard</a>
 		<a href="/api-keys" class="{{if eq .Active "api_keys"}}active{{end}}">API Keys</a>
 		<a href="/tables" class="{{if eq .Active "tables"}}active{{end}}">Tables</a>
+		<a href="/sql" class="{{if eq .Active "sql"}}active{{end}}">SQL</a>
 		<a href="/features" class="{{if eq .Active "features"}}active{{end}}">Features</a>
 		<a href="/users" class="{{if eq .Active "users"}}active{{end}}">Users</a>
 		<a href="/activity" class="{{if eq .Active "activity"}}active{{end}}">Activity</a>

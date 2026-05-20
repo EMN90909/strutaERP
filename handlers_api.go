@@ -11,7 +11,7 @@ func (app *App) HandleAPIStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	app.logAPIKeyUse(key.ID, r, "API_STATUS", "Checked API status")
-	writeJSON(w, http.StatusOK, map[string]interface{}{"status": "online", "key_type": key.Type, "privileges": key.Privileges})
+	writeJSON(w, http.StatusOK, map[string]interface{}{"status": "online", "credential": key.Type, "project_id": key.ProjectID, "privileges": key.Privileges})
 }
 
 func (app *App) HandleAPITables(w http.ResponseWriter, r *http.Request) {
@@ -24,7 +24,13 @@ func (app *App) HandleAPITables(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		app.mu.Lock()
-		tables := tableSummaries(app.Data.Tables)
+		project, exists := app.projectByIDLocked(key.ProjectID)
+		if !exists {
+			app.mu.Unlock()
+			writeJSON(w, http.StatusNotFound, map[string]interface{}{"error": "Project not found for SDK."})
+			return
+		}
+		tables := tableSummaries(project.Tables)
 		app.mu.Unlock()
 		app.logAPIKeyUse(key.ID, r, "TABLES_LIST", "Listed tables")
 		writeJSON(w, http.StatusOK, map[string]interface{}{"tables": tables})
@@ -49,8 +55,14 @@ func (app *App) HandleAPITables(w http.ResponseWriter, r *http.Request) {
 		}
 
 		app.mu.Lock()
-		if _, exists := app.Data.Tables[tableName]; !exists {
-			app.Data.Tables[tableName] = []interface{}{}
+		project, exists := app.projectByIDLocked(key.ProjectID)
+		if !exists {
+			app.mu.Unlock()
+			writeJSON(w, http.StatusNotFound, map[string]interface{}{"error": "Project not found for SDK."})
+			return
+		}
+		if _, exists := project.Tables[tableName]; !exists {
+			project.Tables[tableName] = []interface{}{}
 		}
 		app.logActivityLocked("", key.ID, r, "TABLE_CREATED", "Created table: "+tableName)
 		app.saveLocked()
@@ -83,7 +95,13 @@ func (app *App) HandleAPITableRecords(w http.ResponseWriter, r *http.Request) {
 		}
 
 		app.mu.Lock()
-		records, exists := app.Data.Tables[tableName]
+		project, projectExists := app.projectByIDLocked(key.ProjectID)
+		if !projectExists {
+			app.mu.Unlock()
+			writeJSON(w, http.StatusNotFound, map[string]interface{}{"error": "Project not found for SDK."})
+			return
+		}
+		records, exists := project.Tables[tableName]
 		app.mu.Unlock()
 		if !exists {
 			writeJSON(w, http.StatusNotFound, map[string]interface{}{"error": "Table not found."})
@@ -107,15 +125,26 @@ func (app *App) HandleAPITableRecords(w http.ResponseWriter, r *http.Request) {
 		record["created_at"] = now()
 
 		app.mu.Lock()
-		if _, exists := app.Data.Tables[tableName]; !exists {
-			app.Data.Tables[tableName] = []interface{}{}
+		project, projectExists := app.projectByIDLocked(key.ProjectID)
+		if !projectExists {
+			app.mu.Unlock()
+			writeJSON(w, http.StatusNotFound, map[string]interface{}{"error": "Project not found for SDK."})
+			return
 		}
-		app.Data.Tables[tableName] = append(app.Data.Tables[tableName], record)
+		createdTable := false
+		if _, exists := project.Tables[tableName]; !exists {
+			project.Tables[tableName] = []interface{}{}
+			createdTable = true
+		}
+		project.Tables[tableName] = append(project.Tables[tableName], record)
+		if createdTable {
+			app.logActivityLocked("", key.ID, r, "TABLE_AUTO_CREATED", "Auto-created table on first SDK write: "+tableName)
+		}
 		app.logActivityLocked("", key.ID, r, "TABLE_RECORD_CREATED", "Inserted record into table: "+tableName)
 		app.saveLocked()
 		app.mu.Unlock()
 
-		writeJSON(w, http.StatusCreated, map[string]interface{}{"message": "Record inserted.", "table": tableName, "record": record})
+		writeJSON(w, http.StatusCreated, map[string]interface{}{"message": "Record inserted.", "auto_created_table": createdTable, "table": tableName, "record": record})
 	default:
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]interface{}{"error": "Method not allowed."})
 	}

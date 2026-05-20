@@ -31,6 +31,23 @@ type DataStore struct {
 	APIKeys    []APIKey                 `json:"api_keys"`
 	Activities []Activity               `json:"activities"`
 	Tables     map[string][]interface{} `json:"tables"`
+	Projects   []Project                `json:"projects"`
+	Settings   PlatformSettings         `json:"settings"`
+}
+
+type PlatformSettings struct {
+	BrandName string `json:"brand_name"`
+}
+
+type Project struct {
+	ID          string                   `json:"id"`
+	Name        string                   `json:"name"`
+	Slug        string                   `json:"slug"`
+	Description string                   `json:"description"`
+	Tables      map[string][]interface{} `json:"tables"`
+	Schemas     map[string][]string      `json:"schemas"`
+	CreatedAt   string                   `json:"created_at"`
+	CreatedBy   string                   `json:"created_by"`
 }
 
 type User struct {
@@ -52,6 +69,7 @@ type APIKey struct {
 	LastUsedAt  string   `json:"last_used_at"`
 	CreatedBy   string   `json:"created_by"`
 	Description string   `json:"description"`
+	ProjectID   string   `json:"project_id"`
 }
 
 type Activity struct {
@@ -77,6 +95,7 @@ func NewApp(dataFile string) *App {
 		"users":     "templates/users.html",
 		"activity":  "templates/activity.html",
 		"tables":    "templates/tables.html",
+		"sql":       "templates/sql.html",
 		"features":  "templates/features.html",
 		"api_keys":  "templates/api_keys.html",
 	}
@@ -223,6 +242,10 @@ func (app *App) Load() {
 	if app.Data.Tables == nil {
 		app.Data.Tables = map[string][]interface{}{}
 	}
+	if app.Data.Settings.BrandName == "" {
+		app.Data.Settings.BrandName = "Struta ERP"
+	}
+	app.ensureDefaultProjectLocked()
 }
 
 func emptyStore() DataStore {
@@ -231,12 +254,43 @@ func emptyStore() DataStore {
 		APIKeys:    []APIKey{},
 		Activities: []Activity{},
 		Tables:     map[string][]interface{}{},
+		Projects:   []Project{},
+		Settings:   PlatformSettings{BrandName: "Struta ERP"},
 	}
 }
 
 func (app *App) saveLocked() {
 	b, _ := json.MarshalIndent(app.Data, "", "  ")
 	_ = os.WriteFile(app.DataFile, b, 0600)
+}
+
+func (app *App) ensureDefaultProjectLocked() {
+	if len(app.Data.Projects) > 0 {
+		for i := range app.Data.Projects {
+			if app.Data.Projects[i].Tables == nil {
+				app.Data.Projects[i].Tables = map[string][]interface{}{}
+			}
+			if app.Data.Projects[i].Schemas == nil {
+				app.Data.Projects[i].Schemas = map[string][]string{}
+			}
+		}
+		return
+	}
+
+	tables := app.Data.Tables
+	if tables == nil {
+		tables = map[string][]interface{}{}
+	}
+	app.Data.Projects = []Project{{
+		ID:          newID("prj"),
+		Name:        "Default Project",
+		Slug:        "default",
+		Description: "Primary database project",
+		Tables:      tables,
+		Schemas:     map[string][]string{},
+		CreatedAt:   now(),
+	}}
+	app.Data.Tables = map[string][]interface{}{}
 }
 
 func (app *App) Render(w http.ResponseWriter, name string, data map[string]interface{}) {
@@ -349,6 +403,58 @@ func tableSummaries(tables map[string][]interface{}) []map[string]interface{} {
 		})
 	}
 	return out
+}
+
+func projectSummaries(projects []Project) []map[string]interface{} {
+	out := make([]map[string]interface{}, 0, len(projects))
+	for _, p := range projects {
+		recordCount := 0
+		for _, records := range p.Tables {
+			recordCount += len(records)
+		}
+		out = append(out, map[string]interface{}{
+			"ID":          p.ID,
+			"Name":        p.Name,
+			"Slug":        p.Slug,
+			"Description": p.Description,
+			"Tables":      len(p.Tables),
+			"Records":     recordCount,
+			"CreatedAt":   p.CreatedAt,
+		})
+	}
+	return out
+}
+
+func (app *App) projectByIDLocked(projectID string) (*Project, bool) {
+	if projectID == "" && len(app.Data.Projects) > 0 {
+		return &app.Data.Projects[0], true
+	}
+	for i := range app.Data.Projects {
+		if app.Data.Projects[i].ID == projectID || app.Data.Projects[i].Slug == projectID {
+			return &app.Data.Projects[i], true
+		}
+	}
+	return nil, false
+}
+
+func cleanSlug(name string) string {
+	slug := cleanTableName(name)
+	slug = strings.Trim(slug, "_")
+	if slug == "" {
+		return "project"
+	}
+	return slug
+}
+
+func requestBaseURL(r *http.Request) string {
+	scheme := "http"
+	if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+		scheme = "https"
+	}
+	if forwarded := r.Header.Get("X-Forwarded-Host"); forwarded != "" {
+		return scheme + "://" + forwarded
+	}
+	return scheme + "://" + r.Host
 }
 
 func hasPrivilege(key *APIKey, privilege string) bool {

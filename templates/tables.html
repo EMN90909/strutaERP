@@ -1,13 +1,18 @@
 {{define "title"}}Tables{{end}}
 {{define "content"}}
-<section class="hero"><h1>Tables</h1><p>Tables created through the external API.</p></section>
+<section class="hero"><p class="eyebrow">Document store</p><h1>Tables</h1><p>Tables appear automatically when SDK code inserts the first document into a new table name.</p></section>
 <section class="panel">
+	<form method="GET" action="/tables" class="toolbar-form">
+		<label>Project<select name="project" onchange="this.form.submit()">
+			{{range .Projects}}<option value="{{.ID}}" {{if eq $.SelectedProjectID .ID}}selected{{end}}>{{.Name}}</option>{{end}}
+		</select></label>
+	</form>
 	<table>
 		<tr><th>Name</th><th>Records</th></tr>
 		{{range .Tables}}
 		<tr><td><code>{{.Name}}</code></td><td>{{.Count}}</td></tr>
 		{{else}}
-		<tr><td colspan="2">No tables yet. Create one with an SDK or anon key.</td></tr>
+		<tr><td colspan="2">No tables yet. Insert a record with an SDK key to create one automatically.</td></tr>
 		{{end}}
 	</table>
 </section>

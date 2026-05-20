@@ -1,20 +1,45 @@
 {{define "title"}}Dashboard{{end}}
 {{define "content"}}
 <section class="hero">
-	<h1>Dashboard</h1>
-	<p>Watch users, API activity, generated keys, and external data tables from one place.</p>
+	<div>
+		<p class="eyebrow">Control plane</p>
+		<h1>Struta ERP dashboard</h1>
+		<p>Manage projects, SDK credentials, auto-created document tables, and platform activity from one clean workspace.</p>
+	</div>
 </section>
 <section class="metrics">
 	<div><span>Users</span><strong>{{len .Users}}</strong></div>
 	<div><span>API Keys</span><strong>{{len .APIKeys}}</strong></div>
 	<div><span>Activities</span><strong>{{len .Activities}}</strong></div>
-	<div><span>Tables</span><strong>{{len .Tables}}</strong></div>
+	<div><span>Projects</span><strong>{{len .Projects}}</strong></div>
+</section>
+<section class="split">
+	<div class="panel">
+		<h2>Create Project</h2>
+		<form method="POST" action="/projects/create">
+			<label>Project name<input name="name" placeholder="Production CRM" required></label>
+			<label>Description<textarea name="description" placeholder="What this database will power"></textarea></label>
+			<button type="submit">Create Project</button>
+		</form>
+	</div>
+	<div class="panel">
+		<h2>Projects</h2>
+		<table>
+			<tr><th>Name</th><th>Slug</th><th>Tables</th><th>Records</th></tr>
+			{{range .Projects}}
+			<tr><td>{{.Name}}</td><td><code>{{.Slug}}</code></td><td>{{.Tables}}</td><td>{{.Records}}</td></tr>
+			{{else}}
+			<tr><td colspan="4">No projects yet.</td></tr>
+			{{end}}
+		</table>
+	</div>
 </section>
 <section class="panel">
-	<h2>Quick API Example</h2>
-	<pre>curl -X POST http://localhost:8080/api/v1/tables \
+	<h2>SDK Write Example</h2>
+	<p class="muted">The first insert into a new table creates that table automatically inside the SDK key's project.</p>
+	<pre>curl -X POST {{.BaseURL}}/api/v1/tables/customers \
 -H "Authorization: Bearer YOUR_API_KEY" \
 -H "Content-Type: application/json" \
--d '{"name":"funeral_requests"}'</pre>
+-d '{"name":"Acme Ltd","status":"lead"}'</pre>
 </section>
 {{end}}

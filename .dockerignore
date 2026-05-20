@@ -1,0 +1,5 @@
+.git
+platform_data.json
+*.exe
+*.test
+README.tmp

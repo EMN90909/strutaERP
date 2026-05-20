@@ -1,0 +1,32 @@
+{{define "title"}}SQL Editor{{end}}
+{{define "content"}}
+<section class="hero">
+	<p class="eyebrow">Query workspace</p>
+	<h1>SQL editor</h1>
+	<p>Run lightweight SQL-style commands against a project. Press Enter while focused in the editor to execute.</p>
+</section>
+<section class="panel sql-panel">
+	<form method="POST" action="/sql" id="sqlForm">
+		<label>Project<select name="project_id">
+			{{range .Projects}}<option value="{{.ID}}" {{if eq $.SelectedProjectID .ID}}selected{{end}}>{{.Name}}</option>{{end}}
+		</select></label>
+		<label>Query<textarea name="query" id="queryBox" placeholder="SHOW TABLES;">{{.Query}}</textarea></label>
+		<button type="submit">Run Query</button>
+	</form>
+	<div class="hint-row">
+		<span>SHOW TABLES;</span>
+		<span>SELECT * FROM customers;</span>
+		<span>CREATE TABLE invoices;</span>
+	</div>
+</section>
+{{if .Error}}<section class="notice error-box">{{.Error}}</section>{{end}}
+{{if .Result}}<section class="panel"><h2>Result</h2><pre>{{.Result}}</pre></section>{{end}}
+<script>
+document.getElementById("queryBox").addEventListener("keydown", function (event) {
+	if (event.key === "Enter" && !event.shiftKey) {
+		event.preventDefault();
+		document.getElementById("sqlForm").submit();
+	}
+});
+</script>
+{{end}}

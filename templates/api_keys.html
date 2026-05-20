@@ -1,16 +1,20 @@
 {{define "title"}}API Keys{{end}}
 {{define "content"}}
 <section class="hero">
-	<h1>API Keys</h1>
-	<p>SDK keys unlock auth, storage, and realtime privileges. Anon keys let external sites create and work with tables.</p>
+	<p class="eyebrow">Credentials</p>
+	<h1>SDK keys</h1>
+	<p>SDK keys connect application code to a project. Writes to new table names automatically create document tables on first insert.</p>
 </section>
 <section class="panel">
 	<h2>Create API Key</h2>
 	<form method="POST" action="/api-keys/create" class="inline-form">
 		<label>Name<input name="name" placeholder="Website production key" required></label>
+		<label>Project<select name="project_id" required>
+			{{range .Projects}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+		</select></label>
 		<label>Type<select name="type" required>
-			<option value="sdk">SDK Key - auth, storage, realtime</option>
-			<option value="anon">Anon Key - external table access</option>
+			<option value="sdk">SDK - auth, storage, realtime</option>
+			<option value="anon">Public anon SDK - external table access</option>
 		</select></label>
 		<label>Description<textarea name="description" placeholder="Where this key will be used"></textarea></label>
 		<button type="submit">Create Key</button>
@@ -19,19 +23,32 @@
 <section class="panel">
 	<h2>Existing Keys</h2>
 	<table>
-		<tr><th>Name</th><th>Type</th><th>Key</th><th>Privileges</th><th>Created</th><th>Last Used</th></tr>
+		<tr><th>Name</th><th>SDK Type</th><th>Project</th><th>Key</th><th>Privileges</th><th>Created</th><th>Last Used</th></tr>
 		{{range .APIKeys}}
 		<tr>
 			<td>{{.Name}}</td>
 			<td><span class="badge">{{.Type}}</span></td>
+			<td><code>{{.ProjectID}}</code></td>
 			<td><code>{{.Key}}</code></td>
 			<td>{{range .Privileges}}<span class="badge">{{.}}</span> {{end}}</td>
 			<td>{{.CreatedAt}}</td>
 			<td>{{.LastUsedAt}}</td>
 		</tr>
 		{{else}}
-		<tr><td colspan="6">No API keys yet.</td></tr>
+		<tr><td colspan="7">No SDK keys yet.</td></tr>
 		{{end}}
 	</table>
+</section>
+<section class="panel">
+	<h2>Hosted Domain Example</h2>
+	<pre>const baseUrl = "{{.BaseURL}}";
+await fetch(`${baseUrl}/api/v1/tables/orders`, {
+  method: "POST",
+  headers: {
+    "Authorization": "Bearer YOUR_SDK_KEY",
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({ total: 2500, status: "new" })
+});</pre>
 </section>
 {{end}}
