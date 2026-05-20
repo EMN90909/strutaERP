@@ -1,0 +1,12 @@
+{{define "title"}}Users{{end}}
+{{define "content"}}
+<section class="hero"><h1>Users</h1><p>Accounts registered inside this local platform.</p></section>
+<section class="panel">
+	<table>
+		<tr><th>Name</th><th>Email</th><th>Role</th><th>Created</th></tr>
+		{{range .Users}}
+		<tr><td>{{.Name}}</td><td>{{.Email}}</td><td>{{.Role}}</td><td>{{.CreatedAt}}</td></tr>
+		{{end}}
+	</table>
+</section>
+{{end}}

@@ -1,0 +1,12 @@
+{{define "title"}}Sign In{{end}}
+{{define "content"}}
+<section class="auth-card">
+	<h1>Superuser sign in</h1>
+	{{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+	<form method="POST" action="/login">
+		<label>Email address<input name="email" type="email" required></label>
+		<label>Password<input name="password" type="password" required></label>
+		<button type="submit">Sign In</button>
+	</form>
+</section>
+{{end}}

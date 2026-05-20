@@ -1,0 +1,14 @@
+{{define "title"}}Tables{{end}}
+{{define "content"}}
+<section class="hero"><h1>Tables</h1><p>Tables created through the external API.</p></section>
+<section class="panel">
+	<table>
+		<tr><th>Name</th><th>Records</th></tr>
+		{{range .Tables}}
+		<tr><td><code>{{.Name}}</code></td><td>{{.Count}}</td></tr>
+		{{else}}
+		<tr><td colspan="2">No tables yet. Create one with an SDK or anon key.</td></tr>
+		{{end}}
+	</table>
+</section>
+{{end}}

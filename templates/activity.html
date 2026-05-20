@@ -1,0 +1,14 @@
+{{define "title"}}Activity{{end}}
+{{define "content"}}
+<section class="hero"><h1>Activity</h1><p>The latest dashboard and API events.</p></section>
+<section class="panel">
+	<table>
+		<tr><th>Time</th><th>Action</th><th>User</th><th>API Key</th><th>IP</th><th>Details</th></tr>
+		{{range .Activities}}
+		<tr><td>{{.Time}}</td><td>{{.Action}}</td><td>{{.UserID}}</td><td>{{.APIKeyID}}</td><td>{{.IP}}</td><td>{{.Details}}</td></tr>
+		{{else}}
+		<tr><td colspan="6">No activity yet.</td></tr>
+		{{end}}
+	</table>
+</section>
+{{end}}

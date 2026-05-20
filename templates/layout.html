@@ -1,0 +1,33 @@
+{{define "layout"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>{{block "title" .}}LocalDB Platform{{end}}</title>
+	<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+	{{if .User}}
+	<header class="topbar">
+		<div>
+			<strong>LocalDB Platform</strong>
+			<span>{{.User.Name}} - {{.User.Role}}</span>
+		</div>
+		<a href="/logout">Logout</a>
+	</header>
+	<nav class="nav">
+		<a href="/dashboard" class="{{if eq .Active "dashboard"}}active{{end}}">Dashboard</a>
+		<a href="/api-keys" class="{{if eq .Active "api_keys"}}active{{end}}">API Keys</a>
+		<a href="/tables" class="{{if eq .Active "tables"}}active{{end}}">Tables</a>
+		<a href="/features" class="{{if eq .Active "features"}}active{{end}}">Features</a>
+		<a href="/users" class="{{if eq .Active "users"}}active{{end}}">Users</a>
+		<a href="/activity" class="{{if eq .Active "activity"}}active{{end}}">Activity</a>
+	</nav>
+	{{end}}
+	<main class="{{if .User}}shell{{else}}auth-shell{{end}}">
+		{{template "content" .}}
+	</main>
+</body>
+</html>
+{{end}}

@@ -1,0 +1,20 @@
+{{define "title"}}Dashboard{{end}}
+{{define "content"}}
+<section class="hero">
+	<h1>Dashboard</h1>
+	<p>Watch users, API activity, generated keys, and external data tables from one place.</p>
+</section>
+<section class="metrics">
+	<div><span>Users</span><strong>{{len .Users}}</strong></div>
+	<div><span>API Keys</span><strong>{{len .APIKeys}}</strong></div>
+	<div><span>Activities</span><strong>{{len .Activities}}</strong></div>
+	<div><span>Tables</span><strong>{{len .Tables}}</strong></div>
+</section>
+<section class="panel">
+	<h2>Quick API Example</h2>
+	<pre>curl -X POST http://localhost:8080/api/v1/tables \
+-H "Authorization: Bearer YOUR_API_KEY" \
+-H "Content-Type: application/json" \
+-d '{"name":"funeral_requests"}'</pre>
+</section>
+{{end}}
